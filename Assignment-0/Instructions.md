@@ -1,3 +1,4 @@
+`Clump`
 1. **Parâmetros**:
    - `val`: Este é o valor que desejamos "clampar", ou seja, garantir que ele esteja dentro de um intervalo específico.
    - `min`: Este é o valor mínimo permitido no intervalo.
@@ -14,3 +15,21 @@
    - Chamamos a função `clamp` com os argumentos `valor`, `minimo = 0` e `maximo = 50`.
    - O valor retornado será `25`, pois `25` está dentro do intervalo `[0, 50]`.
    - Isso é útil para garantir que um valor permaneça dentro de certos limites, por exemplo, ao definir valores de posição, cor ou qualquer outra propriedade que tenha limites específicos.
+
+BrushFilter
+`brushFilter`:
+
+1. **Parâmetros**:
+   - `image`: A imagem na qual o filtro será aplicado.
+   - `radius`: O raio do pincel, determinando a área de influência do efeito.
+   - `color`: A cor sólida do pincel.
+   - `vertsString`: Uma string que contém as coordenadas dos centros dos círculos onde o efeito será aplicado.
+
+2. **Funcionalidade**:
+   - A função `brushFilter` desenha círculos sólidos com base nos centros fornecidos.
+   - Para cada centro de círculo fornecido, a função percorre uma área quadrada com lados de tamanho `radius * 2 + 1` (para garantir que todos os pixels dentro do raio sejam considerados).
+   - Para cada pixel dentro desse quadrado, a função verifica se o pixel está dentro do círculo usando a equação do círculo.
+   - Se o pixel estiver dentro do círculo, sua cor é definida como a cor sólida especificada na entrada da função.
+
+3. **Exemplo de Uso**:
+   - Podemos usar esta função para criar pinceladas sólidas em uma imagem, como desenhar círculos ou aplicar manchas de cor sólida em áreas específicas da imagem. Este filtro é útil para adicionar elementos gráficos simples com uma cor sólida em uma determinada região da imagem.
