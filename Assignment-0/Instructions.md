@@ -16,8 +16,7 @@
    - O valor retornado será `25`, pois `25` está dentro do intervalo `[0, 50]`.
    - Isso é útil para garantir que um valor permaneça dentro de certos limites, por exemplo, ao definir valores de posição, cor ou qualquer outra propriedade que tenha limites específicos.
 
-BrushFilter
-`brushFilter`:
+`BrushFilter`:
 
 1. **Parâmetros**:
    - `image`: A imagem na qual o filtro será aplicado.
