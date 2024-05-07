@@ -209,111 +209,85 @@ Filters.gammaFilter = function(image, logOfGamma) {
 *
 * Note that the vignette should still form a perfect circle!
 */
-Filters.vignetteFilter = function(image, innerRadius, outerRadius) {
-    // Calculate the center of the image
-    var centerX = image.width / 2;
-    var centerY = image.height / 2;
+Filters.vignetteFilter = function(image, innerR, outerR) {
+    // Let's ensure that innerR is at least 0.1 smaller than outerR
+    innerR = clamp(innerR, 0, outerR - 0.1);
+    // ----------- STUDENT CODE BEGIN ------------
+    let x_c = image.width / 2
+    let y_c = image.height / 2
 
-    // Calculate the maximum distance from the center to the corners of the image
-    var maxDistance = Math.sqrt(centerX * centerX + centerY * centerY);
-
-    // Calculate the inner and outer radius in pixels
-    var innerRadiusPixels = innerRadius * maxDistance;
-    var outerRadiusPixels = outerRadius * maxDistance;
-
-    // Iterate over each pixel in the image
-    for (var x = 0; x < image.width; x++) {
-        for (var y = 0; y < image.height; y++) {
-            // Calculate the distance from the current pixel to the center of the image
-            var distanceToCenter = Math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY));
-
-            // Calculate the ratio of the distance to the maximum distance
-            var ratio = (distanceToCenter - innerRadiusPixels) / (outerRadiusPixels - innerRadiusPixels);
-
-            // Apply vignette effect based on the ratio
-            // Darken the pixel based on the distance to the center
-            var pixel = image.getPixel(x, y);
-            var darkenFactor = 1 - Math.max(0, Math.min(1, ratio));
-            pixel.data[0] *= darkenFactor; // Red
-            pixel.data[1] *= darkenFactor; // Green
-            pixel.data[2] *= darkenFactor; // Blue
-
-            // Set the modified pixel back to the image
-            image.setPixel(x, y, pixel);
-        }
+    const gauss = (distance, radius) => {
+        let normalized = distance / radius
+        let value = 1 - (normalized - innerR) / (outerR - innerR) ** 2 
+        return value
     }
 
-    // Returning the modified image
+    for (let x = 0; x < image.width; x++) {
+        for (let y = 0; y < image.height; y++) {
+            let pixel = image.getPixel(x, y)
+
+            let distance = Math.sqrt(((x - x_c) * (x - x_c)) + ((y - y_c) * (y - y_c)))
+
+            pixel.data[0] *= gauss(distance, 1000)
+            pixel.data[1] *= gauss(distance, 1000)
+            pixel.data[2] *= gauss(distance, 1000)
+
+            image.setPixel(x, y, pixel)
+        }
+    }
+    // ----------- STUDENT CODE END ------------
+    //Gui.alertOnce ('vignetteFilter is not implemented yet');
     return image;
 };
-
-
 
 /*
 * You will want to build a normalized CDF of the L channel in the image.
 */
 Filters.histogramEqualizationFilter = function(image) {
-    // Verificar se a imagem está no espaço de cores RGB
-    if (image.colorSpace !== 'rgb') {
-        console.error('Error: input image color space must be rgb');
-        return image; // Retornar a imagem original sem modificação
-    }
+    // ----------- STUDENT CODE BEGIN ------------
+    let n_bins = 100
+    let total_pixels = image.width * image.height
+    let histogram = new Array(n_bins).fill(0)
 
-    // Cria uma cópia da imagem para evitar a modificação direta da imagem original
-    var equalizedImage = image.copyImg();
+    for (let x = 0; x < image.width; x++) {
+        for (let y = 0; y < image.height; y++) {
+            let pixel = image.getPixel(x, y).rgbToHsl()
+            let lightness = Math.round(pixel.data[2] * 100) // Scale lightness to [0, 100]
 
-    // Converta a imagem para o espaço de cores HSL
-    var hslImage = Filters.rgbToHsl(equalizedImage);
-
-    // Inicialize um array para armazenar o histograma do canal L
-    var histogram = new Array(256).fill(0);
-
-    // Calcule o histograma do canal L
-    for (var x = 0; x < image.width; x++) {
-        for (var y = 0; y < image.height; y++) {
-            var pixel = hslImage.getPixel(x, y);
-            var l = Math.round(pixel.data[2] * 255); // Converta o canal L para o intervalo [0, 255]
-            histogram[l]++;
+            histogram[lightness]++
         }
     }
 
-    // Calculando a função de distribuição acumulada (CDF) do canal L
-    var cdf = new Array(256).fill(0);
-    cdf[0] = histogram[0];
-    for (var i = 1; i < 256; i++) {
-        cdf[i] = cdf[i - 1] + histogram[i];
+    for (let x = 0; x < histogram.length; x++) {
+        let normalized = histogram[x] / total_pixels
+        histogram[x] = normalized
     }
 
-    // Normalizando a CDF para o intervalo [0, 1]
-    var totalPixels = image.width * image.height;
-    var normalizedCdf = cdf.map(function(value) {
-        return value / totalPixels;
-    });
+    let cdf = []
+    let sum = 0
+    for (let x = 0; x < histogram.length; x++) {
+        sum += histogram[x]
+        cdf.push(sum)
+    }
 
-    // Aplicando a equalização de histograma ao canal L
-    for (var x = 0; x < image.width; x++) {
-        for (var y = 0; y < image.height; y++) {
-            var pixel = hslImage.getPixel(x, y);
-            var l = Math.round(pixel.data[2] * 255); // Convertendo L para o intervalo [0, 255]
-            var equalizedL = normalizedCdf[l] * 255; // Mapeando o valor original de L para o valor equalizado
-            pixel.data[2] = equalizedL / 255; // Convertendo de volta para o intervalo [0, 1]
-            hslImage.setPixel(x, y, pixel);
+    for (let x = 0; x < image.width; x++) {
+        for (let y = 0; y < image.height; y++) {
+            let pixel = image.getPixel(x, y).rgbToHsl()
+
+            let lightness = Math.round(pixel.data[2] * 100)
+            let equalized_lightness = Math.round((cdf[lightness] - cdf[0]) / (1 - cdf[0]) * 100)
+
+            pixel.data[2] = equalized_lightness / 100
+
+            let new_pixel = pixel.hslToRgb()
+            image.setPixel(x, y, new_pixel)
         }
     }
 
-    // Convertendo a imagem de volta para o espaço de cores RGB
-    for (var x = 0; x < image.width; x++) {
-        for (var y = 0; y < image.height; y++) {
-            var pixel = hslImage.getPixel(x, y);
-            var rgbPixel = pixel.hslToRgb();
-            equalizedImage.setPixel(x, y, rgbPixel);
-        }
-    }
-
-    // Retornando a imagem equalizada
-    return equalizedImage;
+    // ----------- STUDENT CODE END ------------
+    //Gui.alertOnce ('histogramEqualizationFilter is not implemented yet');
+    return image;
 };
-
 
 Filters.rgbToHsl = function(pixel) {
     assert(pixel.colorSpace === "rgb", "input pixel color space must be rgb");
