@@ -2,7 +2,35 @@ var Filters = Filters || {};
 
 // Space for your helper functions
 // ----------- STUDENT CODE BEGIN ------------
-// ----------- Our reference solution uses 105 lines of code.
+function createRotationMatrixX(angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [
+    [1, 0, 0],
+    [0, cos, -sin],
+    [0, sin, cos]
+  ];
+}
+
+function createRotationMatrixY(angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [
+    [cos, 0, sin],
+    [0, 1, 0],
+    [-sin, 0, cos]
+  ];
+}
+
+function createRotationMatrixZ(angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [
+    [cos, -sin, 0],
+    [sin, cos, 0],
+    [0, 0, 1]
+  ];
+}
 // ----------- STUDENT CODE END ------------
 
 // Translate all selected vertices in the mesh by the given x,y,z offsets.
@@ -25,14 +53,48 @@ Filters.translation = function(mesh, x, y, z) {
 Filters.rotation = function(mesh, x, y, z) {
   const verts = mesh.getModifiableVertices();
 
-  // ----------- STUDENT CODE BEGIN ------------
-  // ----------- Our reference solution uses 5 lines of code.
-  // ----------- STUDENT CODE END ------------
-  Gui.alertOnce("Rotation is not implemented yet");
+  // Function to apply a transformation matrix to a vertex
+  function applyMatrixToVertex(vertex, matrix) {
+    const x = vertex.x;
+    const y = vertex.y;
+    const z = vertex.z;
+    return new THREE.Vector3(
+      x * matrix[0][0] + y * matrix[0][1] + z * matrix[0][2],
+      x * matrix[1][0] + y * matrix[1][1] + z * matrix[1][2],
+      x * matrix[2][0] + y * matrix[2][1] + z * matrix[2][2]
+    );
+  }
+
+  // Create the rotation matrices for X, Y, and Z axes
+  const rotationMatrixX = createRotationMatrixX(x);
+  const rotationMatrixY = createRotationMatrixY(y);
+  const rotationMatrixZ = createRotationMatrixZ(z);
+
+  // Combine rotation matrices into a single transformation matrix
+  const combinedRotationMatrix = multiplyMatrices(multiplyMatrices(rotationMatrixX, rotationMatrixY), rotationMatrixZ);
+
+  // Apply the combined rotation matrix to each vertex
+  verts.forEach(vertex => {
+    const transformedVertex = applyMatrixToVertex(vertex.position.clone(), combinedRotationMatrix);
+    vertex.position.copy(transformedVertex);
+  });
 
   mesh.calculateFacesArea();
   mesh.updateNormals();
 };
+
+// Utility function to multiply two 3x3 matrices
+function multiplyMatrices(a, b) {
+  const result = [];
+  for (let i = 0; i < 3; i++) {
+    result[i] = [];
+    for (let j = 0; j < 3; j++) {
+      result[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
+    }
+  }
+  return result;
+}
+
 
 // Uniformly scale the position of all selected vertices in the mesh
 // by the provided scale factor s
@@ -40,9 +102,12 @@ Filters.scale = function(mesh, s) {
   const verts = mesh.getModifiableVertices();
 
   // ----------- STUDENT CODE BEGIN ------------
-  // ----------- Our reference solution uses 4 lines of code.
+  const t = new THREE.Vector3(s, s, s);
+  for (let i = 0; i < verts.length; i++) {
+    verts[i].position.multiply(t)
+  }
   // ----------- STUDENT CODE END ------------
-  Gui.alertOnce("Scaling is not implemented yet");
+  //Gui.alertOnce("Scaling is not implemented yet");
 
   mesh.calculateFacesArea();
   mesh.updateNormals();
@@ -64,14 +129,17 @@ Filters.curvature = function(mesh) {
 Filters.noise = function(mesh, factor) {
   const verts = mesh.getModifiableVertices();
 
-  // ----------- STUDENT CODE BEGIN ------------
-  // ----------- Our reference solution uses 13 lines of code.
-  // ----------- STUDENT CODE END ------------
-  Gui.alertOnce("Noise is not implemented yet");
+  verts.forEach(vertex => {
+    const normal = vertex.normal.clone();
+    const avgEdgeLength = vertex.edges.reduce((sum, edge) => sum + edge.length(), 0) / vertex.edges.length;
+    const noiseFactor = factor * avgEdgeLength * (Math.random() - 0.5);
+    vertex.position.addScaledVector(normal, noiseFactor);
+  });
 
   mesh.calculateFacesArea();
   mesh.updateNormals();
 };
+
 
 // Smooth the mesh using the specified weighting scheme.
 // In the standard case, this is done using uniform Laplacian smoothing,
@@ -140,9 +208,18 @@ Filters.twist = function(mesh, factor) {
   const verts = mesh.getModifiableVertices();
 
   // ----------- STUDENT CODE BEGIN ------------
-  // ----------- Our reference solution uses 8 lines of code.
+  for (let i = 0; i < verts.length; i++) {
+    let vertex = verts[i].position
+    const matrix = createRotationMatrixY(vertex.y * factor)
+
+    verts[i].position = new THREE.Vector3(
+        vertex.x * matrix[0][0] + vertex.y * matrix[0][1] + vertex.z * matrix[0][2],
+        vertex.x * matrix[1][0] + vertex.y * matrix[1][1] + vertex.z * matrix[1][2],
+        vertex.x * matrix[2][0] + vertex.y * matrix[2][1] + vertex.z * matrix[2][2]
+      )
+  }
   // ----------- STUDENT CODE END ------------
-  Gui.alertOnce("Twist is not implemented yet");
+  //Gui.alertOnce("Twist is not implemented yet");
 
   mesh.calculateFacesArea();
   mesh.updateNormals();
@@ -163,14 +240,17 @@ Filters.wacky = function(mesh, factor) {
 Filters.triangulate = function(mesh) {
   const faces = mesh.getModifiableFaces();
 
-  // ----------- STUDENT CODE BEGIN ------------
-  // ----------- Our reference solution uses 4 lines of code.
-  // ----------- STUDENT CODE END ------------
-  Gui.alertOnce("triangulate is not implemented yet");
+  faces.forEach(face => {
+    if (face.vertices.length > 3) {
+      const newFaces = earClip(face.vertices);
+      mesh.replaceFace(face, newFaces);
+    }
+  });
 
   mesh.calculateFacesArea();
   mesh.updateNormals();
 };
+
 
 // wrapper for splitEdgeMakeVert in mesh.js
 Filters.splitEdge = function(mesh) {
@@ -259,14 +339,16 @@ Filters.joinFaces = function(mesh) {
 Filters.extrude = function(mesh, factor) {
   const faces = mesh.getModifiableFaces();
 
-  // ----------- STUDENT CODE BEGIN ------------
-  // ----------- Our reference solution uses 32 lines of code.
-  // ----------- STUDENT CODE END ------------
-  Gui.alertOnce("Extrude is not implemented yet");
+  faces.forEach(face => {
+    const normal = face.normal.clone();
+    const newVertices = face.vertices.map(v => v.clone().addScaledVector(normal, factor));
+    mesh.createExtrudedFace(face, newVertices);
+  });
 
   mesh.calculateFacesArea();
   mesh.updateNormals();
 };
+
 
 // Truncate the selected vertices of the mesh by "snipping off" corners
 // and replacing them with faces. factor specifies the size of the truncation.
