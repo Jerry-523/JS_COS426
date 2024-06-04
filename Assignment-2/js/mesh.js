@@ -26,10 +26,13 @@ Mesh.prototype.edgesOnFace = function(f) {
   const halfedges = [];
   let he = f.halfedge;
   const first = he;
-  do {
+  while (true) {
     halfedges.push(he);
     he = he.next;
-  } while (he !== first);
+    if (he === first) {
+      break;
+    }
+  }
   return halfedges;
 };
 
@@ -40,9 +43,9 @@ Mesh.prototype.facesOnFace = function(f) {
   let he = f.halfedge;
   const first = he;
   do {
-    const twinFace = he.twin.face;
-    if (twinFace && twinFace !== f) {
-      faces.push(twinFace);
+    const oppFace = he.opposite.face;
+    if (oppFace !== f) {
+      faces.push(oppFace);
     }
     he = he.next;
   } while (he !== first);
@@ -55,14 +58,10 @@ Mesh.prototype.facesOnFace = function(f) {
 Mesh.prototype.verticesOnVertex = function(v) {
   const vertices = [];
   let he = v.halfedge;
-  const first = he;
   do {
-    const neighbor = he.twin.vertex;
-    if (!vertices.includes(neighbor)) {
-      vertices.push(neighbor);
-    }
-    he = he.twin.next;
-  } while (he !== first);
+    vertices.push(he.opposite.vertex);
+    he = he.opposite.next;
+  } while (he !== v.halfedge);
   return vertices;
 };
 
@@ -70,51 +69,45 @@ Mesh.prototype.verticesOnVertex = function(v) {
 Mesh.prototype.edgesOnVertex = function(v) {
   const halfedges = [];
   let he = v.halfedge;
-  const first = he;
   do {
     halfedges.push(he);
-    he = he.twin.next;
-  } while (he !== first);
+    he = he.opposite.next;
+  } while (he !== v.halfedge);
   return halfedges;
 };
+
 
 // Return all faces that include v as a vertex.
 Mesh.prototype.facesOnVertex = function(v) {
   const faces = [];
   let he = v.halfedge;
-  const first = he;
   do {
-    const face = he.face;
-    if (!faces.includes(face)) {
-      faces.push(face);
-    }
-    he = he.twin.next;
-  } while (he !== first);
+    faces.push(he.face);
+    he = he.opposite.next;
+  } while (he !== v.halfedge);
   return faces;
 };
 
 // Return the vertices that form the endpoints of a given edge
 Mesh.prototype.verticesOnEdge = function(e) {
-  const vertices = [e.vertex, e.twin.vertex];
-  return vertices;
+  return [e.vertex, e.opposite.vertex];
 };
 
 // Return the faces that include a given edge
 Mesh.prototype.facesOnEdge = function(e) {
-  const faces = [e.face, e.twin.face];
-  return faces;
+  return [e.face, e.opposite.face];
 };
+
 
 // Return the edge pointing from v1 to v2
 Mesh.prototype.edgeBetweenVertices = function(v1, v2) {
   let he = v1.halfedge;
-  const first = he;
   do {
-    if (he.twin.vertex === v2) {
+    if (he.opposite.vertex === v2) {
       return he;
     }
-    he = he.twin.next;
-  } while (he !== first);
+    he = he.opposite.next;
+  } while (he !== v1.halfedge);
   return undefined;
 };
 
@@ -124,22 +117,23 @@ Mesh.prototype.edgeBetweenVertices = function(v1, v2) {
 
 // Return the surface area of a provided face f.
 Mesh.prototype.calculateFaceArea = function(f) {
-  let area = 0.0;
   const vertices = this.verticesOnFace(f);
-  if (vertices.length < 3) {
-    return area;
-  }
+  if (vertices.length < 3) return 0;
 
-  const origin = vertices[0].position;
-  for (let i = 1; i < vertices.length - 1; ++i) {
-    const v1 = vertices[i].position.clone().sub(origin);
-    const v2 = vertices[i + 1].position.clone().sub(origin);
-    area += v1.cross(v2).length() / 2;
+  const p0 = vertices[0].position;
+  let area = 0;
+  for (let i = 1; i < vertices.length - 1; i++) {
+    const p1 = vertices[i].position;
+    const p2 = vertices[i + 1].position;
+    const edge1 = new THREE.Vector3().subVectors(p1, p0);
+    const edge2 = new THREE.Vector3().subVectors(p2, p0);
+    const crossProd = new THREE.Vector3().crossVectors(edge1, edge2);
+    area += crossProd.length() / 2;
   }
-
   f.area = area;
   return area;
 };
+
 
 // Update the area attributes of all faces in the mesh
 Mesh.prototype.calculateFacesArea = function() {
@@ -151,9 +145,9 @@ Mesh.prototype.calculateFacesArea = function() {
 // Calculate the vertex normal at a given vertex,
 // using the face normals of bordering faces, weighted by face area
 Mesh.prototype.calculateVertexNormal = function(v) {
-  const v_normal = new THREE.Vector3(0, 0, 0);
   const faces = this.facesOnVertex(v);
-  for (let i = 0; i < faces.length; ++i) {
+  const v_normal = new THREE.Vector3(0, 0, 0);
+  for (let i = 0; i < faces.length; i++) {
     const face = faces[i];
     v_normal.addScaledVector(face.normal, face.area);
   }
@@ -161,6 +155,7 @@ Mesh.prototype.calculateVertexNormal = function(v) {
   v.normal = v_normal;
   return v_normal;
 };
+
 
 // update the vertex normals of every vertex in the mesh
 Mesh.prototype.updateVertexNormals = function() {
@@ -171,14 +166,14 @@ Mesh.prototype.updateVertexNormals = function() {
 
 // compute the average length of edges touching v
 Mesh.prototype.averageEdgeLength = function(v) {
-  let totalLength = 0.0;
-  const halfedges = this.edgesOnVertex(v);
-  halfedges.forEach(he => {
-    totalLength += he.length();
-  });
-  const avg = totalLength / halfedges.length;
-  return avg;
+  const edges = this.edgesOnVertex(v);
+  let totalLength = 0;
+  for (let i = 0; i < edges.length; i++) {
+    totalLength += edges[i].vertex.position.distanceTo(edges[i].opposite.vertex.position);
+  }
+  return totalLength / edges.length;
 };
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Topology
@@ -188,9 +183,12 @@ Mesh.prototype.averageEdgeLength = function(v) {
 // split that face so it consists only of several triangular faces. 
 Mesh.prototype.triangulateFace = function(f) {
   const vertices = this.verticesOnFace(f);
-  const origin = vertices[0];
-  for (let i = 1; i < vertices.length - 1; ++i) {
-    this.addFace(origin, vertices[i], vertices[i + 1]);
+  if (vertices.length <= 3) return; // Already a triangle or invalid
+
+  let firstVertex = vertices[0];
+  for (let i = 1; i < vertices.length - 1; i++) {
+    let v1 = vertices[i];
+    let v2 = vertices[i + 1];
+    this.splitFaceMakeEdge(f, firstVertex, v2);
   }
-  this.deleteFace(f);
 };
